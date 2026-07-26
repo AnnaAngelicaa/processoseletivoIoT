@@ -2,8 +2,7 @@
 
 ## Identificação do Candidato
 
-- **Nome completo:** _[preencher]_
-- **GitHub:** _[preencher]_
+- **Nome completo:** Anna Angélica Costa de Souza
 
 ---
 
