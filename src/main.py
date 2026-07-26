@@ -4,6 +4,7 @@ from machine import Pin, I2C
 # ---------------- Parametros ----------------
 LIMITE_TEMPO_X = 5000       # ms - tempo maximo com a porta aberta
 LIMITE_VARIACAO_Y = 3.0     # graus C - variacao maxima de temperatura tolerada
+DEBOUNCE_NORMALIZACAO = 600  # ms - confirma estabilidade antes de normalizar
 
 # ---------------- Hardware ----------------
 # Botao (fim de curso da porta): Fechado/Pressionado = 1, Aberto/Solto = 0
@@ -31,6 +32,7 @@ temp_referencia = None
 em_alarme = False
 alarme_porta_disparado = False
 alarme_temp_disparado = False
+condicoes_seguras_desde = None
 
 print("Sistema de Monitoramento Inicializado")
 
@@ -38,7 +40,6 @@ while True:
     porta_fechada = btn1.value() == 1
     temp_atual = ler_temperatura()
 
-    # Captura a referencia apenas na primeira leitura estavel (ou apos normalizacao)
     if temp_referencia is None and porta_fechada and not em_alarme:
         temp_referencia = temp_atual
 
@@ -65,10 +66,16 @@ while True:
     # ---- Normalizacao: exige AMBAS as condicoes seguras simultaneamente ----
     condicoes_seguras = porta_fechada and delta_t < LIMITE_VARIACAO_Y
     if em_alarme and condicoes_seguras:
-        em_alarme = False
-        alarme_porta_disparado = False
-        alarme_temp_disparado = False
-        temp_referencia = temp_atual  # novo baseline
-        print("Status: Sistema Normalizado.")
+        if condicoes_seguras_desde is None:
+            condicoes_seguras_desde = time.ticks_ms()
+        elif time.ticks_diff(time.ticks_ms(), condicoes_seguras_desde) >= DEBOUNCE_NORMALIZACAO:
+            em_alarme = False
+            alarme_porta_disparado = False
+            alarme_temp_disparado = False
+            temp_referencia = temp_atual
+            condicoes_seguras_desde = None
+            print("Status: Sistema Normalizado.")
+    else:
+        condicoes_seguras_desde = None
 
     time.sleep_ms(50)
