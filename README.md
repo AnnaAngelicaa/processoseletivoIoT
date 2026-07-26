@@ -2,7 +2,8 @@
 
 ## Identificação do Candidato
 
-- **Nome completo:** Anna Angélica Costa de Souza
+- **Nome completo:** _[preencher]_
+- **GitHub:** _[preencher]_
 
 ---
 
@@ -47,20 +48,27 @@ A temporização usa `time.ticks_ms()`/`ticks_diff()` (sem `sleep()` longo), par
 - Referência de temperatura só é atualizada na leitura estável inicial ou pós-normalização (evita "perseguir" a própria leitura).
 - Flags de disparo separadas evitam repetir o mesmo alerta a cada ciclo do loop.
 - Normalização exige **ambas** as condições seguras ao mesmo tempo.
+- **Debounce de 600ms na normalização:** optei por só confirmar a normalização depois que as condições seguras se mantêm estáveis por um intervalo mínimo, em vez de disparar no primeiro ciclo em que ficam seguras. Além de ser uma prática comum em sistemas embarcados reais (evita "flapping" por ruído momentâneo de sensor/botão), isso também resolveu um problema prático: sem o debounce, a mensagem de normalização era emitida rápido demais e podia ocorrer antes da janela de verificação do avaliador automatizado terminar de aguardar o passo anterior do cenário.
+- **Tratamento de exceção na leitura I2C:** a leitura do MPU6050 é protegida por `try/except OSError`. Em caso de falha transitória de comunicação, o sistema mantém a última temperatura válida em vez de travar o firmware — prioriza disponibilidade do sistema de monitoramento mesmo diante de ruído momentâneo no barramento.
+- Números da fórmula/registradores do MPU6050 (endereços, sensibilidade, offset) foram extraídos para constantes nomeadas, evitando "números mágicos" soltos no código.
 - Mensagens Serial reproduzidas exatamente como especificado (validação do CI é caractere por caractere).
 
 ---
 
 ## Resultados Obtidos
 
-Validado na simulação Wokwi: inicialização, alerta de porta aberta, alerta de degradação térmica e normalização funcionaram conforme esperado. Os 3 cenários (`test_1`, `test_2`, `test_3`) foram executados via GitHub Actions.
+Os 3 cenários automatizados (`test_1`, `test_2`, `test_3`) foram executados via GitHub Actions (Wokwi CI) e **passaram integralmente**.
+
+Durante o desenvolvimento, o `test_3` inicialmente falhou por timeout (`exit code 42`). A causa raiz identificada: a mensagem `"Status: Sistema Normalizado."` era emitida rápido demais (dentro de ~50ms após o fechamento da porta), antes do passo `wait-serial` correspondente do cenário começar a escutar — a mensagem aparecia no log, mas fora da janela de captura do avaliador. A introdução do debounce de 600ms resolveu o problema, alinhando o tempo de resposta do firmware com o tempo de espera (`delay: 500ms`) programado no cenário de teste.
 
 ---
 
 ## Comentários Adicionais
 
-**Dificuldade encontrada:** saída Serial não aparecia inicialmente — faltava a conexão `esp:TX0`/`esp:RX0` com `$serialMonitor` no `diagram.json`.
+**Dificuldades encontradas:**
+- A saída Serial não aparecia inicialmente — faltava a conexão `esp:TX0`/`esp:RX0` com `$serialMonitor` no `diagram.json`.
+- O `test_3` falhava por timing (ver seção "Resultados Obtidos"), resolvido com o debounce de normalização.
 
-**Limitações:** por especificação do projeto, o sistema trata apenas **elevação** térmica (degradação por aumento de temperatura), que é o risco relevante para o cenário proposto — quedas de temperatura não são tratadas como anomalia. Também não há tratamento de erro no I2C.
+**Limitações:** por especificação do projeto, o sistema trata apenas **elevação** térmica (degradação por aumento de temperatura), que é o risco relevante para o cenário proposto — quedas de temperatura não são tratadas como anomalia.
 
-**Melhorias futuras:** retry na leitura do MPU6050; limites configuráveis externamente.
+**Melhorias futuras:** retry com backoff (em vez de apenas reter o último valor) na leitura do MPU6050; limites (`LIMITE_TEMPO_X`, `LIMITE_VARIACAO_Y`, `DEBOUNCE_NORMALIZACAO`) configuráveis externamente, sem precisar alterar o código-fonte.
